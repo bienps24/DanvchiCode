@@ -40,7 +40,6 @@ function stopTypingLoop(userId) {
 
 // ==========================================
 // 1. /START HANDLER
-// LAGING tulad ng nasa unang photo
 // ==========================================
 bot.start(async (ctx) => {
   const msg = await ctx.reply(
@@ -66,50 +65,45 @@ bot.start(async (ctx) => {
 
 // ==========================================
 // 2. CONTACT HANDLER
-// Pagkatapos i-tap ang "Hindi ako robot!"
+// FIXED:
+// - remove keyboard agad para mawala yung malaking button sa baba
+// - wala nang "Ilagay ang Code" button from bot
 // ==========================================
 bot.on("contact", async (ctx) => {
   const contact = ctx.message.contact;
   if (!contact) return;
 
+  // delete shared contact bubble after 2 seconds
   scheduleDelete(ctx.chat.id, ctx.message.message_id, 2000);
 
   if (contact.user_id && contact.user_id !== ctx.from.id) {
     const warn = await ctx.reply(
-      "Mukhang ibang contact ito. Paki-tap ang button para i-share ang sarili mong Telegram number."
+      "Mukhang ibang contact ito. Paki-tap ang button para i-share ang sarili mong Telegram number.",
+      {
+        reply_markup: {
+          remove_keyboard: true,
+        },
+      }
     );
-    scheduleDelete(ctx.chat.id, warn.message_id);
+    scheduleDelete(ctx.chat.id, warn.message_id, 4000);
     return;
   }
 
-  // I-save ang number
+  // save phone
   userPhones.set(ctx.from.id, contact.phone_number);
 
-  // Tanggalin ang keyboard sa ibaba para malinis
-  const reply = await ctx.reply("⏳ Naglo-load...", {
-    reply_markup: {
-      remove_keyboard: true,
-    },
-  });
-  scheduleDelete(ctx.chat.id, reply.message_id, 2000);
-
-  // Ilabas ang WebApp Button para makapag-submit na ng code
-  const webappMsg = await ctx.reply(
-    "✅ Verified! Pindutin ang button sa ibaba upang ilagay ang code.",
+  // IMPORTANT:
+  // remove keyboard agad para mawala yung malaking "Hindi ako robot!" sa ibaba
+  // at huwag nang mag-send ng "Ilagay ang Code" button
+  const reply = await ctx.reply(
+    "✅ Verified!",
     {
       reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: "📝 Ilagay ang Code",
-              web_app: { url: WEBAPP_URL },
-            },
-          ],
-        ],
+        remove_keyboard: true,
       },
     }
   );
-  scheduleDelete(ctx.chat.id, webappMsg.message_id);
+  scheduleDelete(ctx.chat.id, reply.message_id, 2000);
 });
 
 // ==========================================
